@@ -11,6 +11,7 @@ import {
   getGetModQueryKey, getListModsQueryKey,
   useAcceptDisclaimer, useCreateMod, useGetMod, useHealthCheck,
   useListMods, useListTags, useReportMod, useToggleModLike, useUploadModFile,
+  setAuthTokenGetter, setBaseUrl,
 } from '@workspace/api-client-react';
 import { Link, Route, Switch, useLocation, useParams, Router as WouterRouter } from 'wouter';
 import {
@@ -27,6 +28,9 @@ const clerkPubKey = publishableKeyFromHost(
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
 );
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL;
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim().replace(/\\/+$/, "") ?? "";
+
+setBaseUrl(apiBaseUrl || null);
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -489,6 +493,17 @@ function SignUpPage() {
   </div>;
 }
 
+function ClerkApiTokenBridge() {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    setAuthTokenGetter(() => getToken());
+    return () => setAuthTokenGetter(null);
+  }, [getToken]);
+
+  return null;
+}
+
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
   const queryClient = useQueryClient();
@@ -525,6 +540,7 @@ function ClerkProviderWithRoutes() {
     routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
   >
     <QueryClientProvider client={queryClient}>
+      <ClerkApiTokenBridge />
       <ClerkQueryClientCacheInvalidator />
       <Switch>
         <Route path="/" component={Router} />
