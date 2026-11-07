@@ -1,0 +1,1 @@
+{"version":3,"file":"modDraft.d.ts","sourceRoot":"","sources":["../../../src/generated/types/modDraft.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,kBAAkB,CAAC;AAEvD,MAAM,WAAW,QAAQ;IACvB,EAAE,EAAE,MAAM,CAAC;IACX,KAAK,EAAE,MAAM,CAAC;IACd,IAAI,EAAE,MAAM,CAAC;IACb,MAAM,EAAE,cAAc,CAAC;IACvB,SAAS,EAAE,IAAI,CAAC;CACjB"}
