@@ -1,0 +1,388 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: TeaMods catalog and publishing API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: mods
+    description: Browse, publish, and moderate Minecraft mods
+  - name: tags
+    description: Catalog genres
+  - name: disclaimer
+    description: Download consent
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /admin/status:
+    get:
+      operationId: getAdminStatus
+      tags: [admin]
+      summary: Get the current user's admin status
+      responses:
+        "200":
+          description: Whether the current signed-in user is an administrator
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStatus"
+  /mods:
+    get:
+      operationId: listMods
+      tags: [mods]
+      summary: List published mods
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string, maxLength: 120 }
+        - in: query
+          name: tag
+          schema: { type: string, maxLength: 60 }
+        - in: query
+          name: sort
+          schema: { type: string, enum: [popular, newest], default: popular }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        "200":
+          description: Published mods that are not hidden by moderation or author bans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModList"
+    post:
+      operationId: createMod
+      tags: [mods]
+      summary: Create a mod draft
+      description: Requires a signed-in user. A mod is listed after a clean file is uploaded.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateModInput"
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModDraft"
+        "400":
+          description: Invalid mod details
+        "401":
+          description: Sign-in required
+  /mods/{modId}:
+    get:
+      operationId: getMod
+      tags: [mods]
+      summary: Get a published mod
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+      responses:
+        "200":
+          description: Mod details and available files
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModDetail"
+        "404":
+          description: Mod not found or hidden
+  /mods/{modId}/verification:
+    post:
+      operationId: verifyMod
+      tags: [admin]
+      summary: Mark a mod as verified
+      description: Requires an administrator account. This operation is idempotent.
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+      responses:
+        "200":
+          description: Mod verification state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModVerification"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Administrator role required
+        "404":
+          description: Mod not found
+  /mods/{modId}/files:
+    post:
+      operationId: uploadModFile
+      tags: [mods]
+      summary: Upload and scan a mod file
+      description: Requires a signed-in author. Accepts one .jar file and supported Minecraft versions. Files are not published unless the scan is clean.
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ModFileUploadInput"
+      responses:
+        "201":
+          description: Clean file uploaded and attached to the mod
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModFile"
+        "400":
+          description: Invalid file or version list
+        "401":
+          description: Sign-in required
+        "403":
+          description: Not the mod author
+        "422":
+          description: File contains viruses or could not be verified
+  /mods/{modId}/files/{fileId}/download:
+    get:
+      operationId: downloadModFile
+      tags: [mods]
+      summary: Download an available mod file
+      description: Requires the disclaimer consent cookie and redirects to the verified Google Drive link.
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+        - in: path
+          name: fileId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "302":
+          description: Redirect to the file
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "403":
+          description: Disclaimer consent required
+        "404":
+          description: File not found or hidden
+  /mods/{modId}/like:
+    post:
+      operationId: toggleModLike
+      tags: [mods]
+      summary: Toggle the current user's like
+      description: Requires a signed-in user.
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+      responses:
+        "200":
+          description: Updated like state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LikeResult"
+        "401":
+          description: Sign-in required
+        "404":
+          description: Mod not found or hidden
+  /mods/{modId}/reports:
+    post:
+      operationId: reportMod
+      tags: [mods]
+      summary: Report a mod for review
+      description: Requires a signed-in user. The report hides the mod pending manual review and does not ban its author.
+      parameters:
+        - $ref: "#/components/parameters/ModId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: Report recorded and mod hidden pending review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResult"
+        "401":
+          description: Sign-in required
+        "404":
+          description: Mod not found
+  /tags:
+    get:
+      operationId: listTags
+      tags: [tags]
+      summary: List catalog genres
+      responses:
+        "200":
+          description: Available genres and published mod counts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+  /disclaimer/accept:
+    post:
+      operationId: acceptDisclaimer
+      tags: [disclaimer]
+      summary: Record disclaimer acceptance
+      description: Sets the signed consent cookie required for sign-in and downloads.
+      responses:
+        "200":
+          description: Consent recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DisclaimerAccepted"
+components:
+  parameters:
+    ModId:
+      in: path
+      name: modId
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    AdminStatus:
+      type: object
+      properties:
+        isAdmin: { type: boolean }
+      required: [isAdmin]
+    ModVerification:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        verified: { type: boolean }
+      required: [id, verified]
+    ModList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModSummary"
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1 }
+      required: [items, total, page, pageSize]
+    ModSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        authorDisplayName: { type: ["string", "null"] }
+        tags:
+          type: array
+          items: { type: string }
+        likeCount: { type: integer, minimum: 0 }
+        downloadCount: { type: integer, minimum: 0 }
+        fileCount: { type: integer, minimum: 0 }
+        verified: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, slug, description, authorDisplayName, tags, likeCount, downloadCount, fileCount, verified, createdAt]
+    ModDetail:
+      allOf:
+        - $ref: "#/components/schemas/ModSummary"
+        - type: object
+          properties:
+            files:
+              type: array
+              items:
+                $ref: "#/components/schemas/ModFile"
+          required: [files]
+    ModDraft:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        slug: { type: string }
+        status: { type: string, enum: [draft] }
+        createdAt: { type: string, format: date-time }
+      required: [id, title, slug, status, createdAt]
+    ModFile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string }
+        minecraftVersions:
+          type: array
+          items: { type: string }
+        downloadUrl: { type: ["string", "null"], format: uri }
+        createdAt: { type: string, format: date-time }
+      required: [id, fileName, minecraftVersions, downloadUrl, createdAt]
+    Tag:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        modCount: { type: integer, minimum: 0 }
+      required: [id, name, slug, modCount]
+    CreateModInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 3, maxLength: 100 }
+        description: { type: string, minLength: 20, maxLength: 5000 }
+        tags:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items: { type: string, minLength: 1, maxLength: 60 }
+      required: [title, description, tags]
+    ModFileUploadInput:
+      type: object
+      properties:
+        file: { type: string, format: binary }
+        minecraftVersions: { type: string, description: Comma-separated Minecraft versions }
+      required: [file, minecraftVersions]
+    LikeResult:
+      type: object
+      properties:
+        liked: { type: boolean }
+        likeCount: { type: integer, minimum: 0 }
+      required: [liked, likeCount]
+    ReportInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [malware, copyright, broken, inappropriate, other]
+        details: { type: string, maxLength: 2000 }
+      required: [reason]
+    ReportResult:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [submitted] }
+      required: [id, status]
+    DisclaimerAccepted:
+      type: object
+      properties:
+        accepted: { type: boolean, enum: [true] }
+      required: [accepted]
+
