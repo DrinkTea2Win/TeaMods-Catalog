@@ -45,7 +45,7 @@ export function setDisclaimerCookie(res: Response): void {
   res.cookie(DISCLAIMER_COOKIE, value, {
     httpOnly: true,
     secure: true,
-    sameSite: "lax",
+    sameSite: "none",
     path: "/api",
     maxAge: 365 * 24 * 60 * 60 * 1000,
   });
