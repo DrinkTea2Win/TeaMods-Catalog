@@ -87,7 +87,7 @@ const clerkAppearance = {
   },
 };
 
-const DISCLAIMER = 'Нажимая "Продолжить", вы соглашаетесь с тем, что все моды загружены пользователями, администрация не проверяет файлы на вирусы, и вы скачиваете их на свой страх и риск';
+const DISCLAIMER = 'Моды на TeaMods публикуются пользователями. Мы стараемся поддерживать порядок в каталоге, однако не можем гарантировать безопасность каждого стороннего файла. Перед запуском скачанных файлов проверяйте их антивирусом. Скачивая моды, вы принимаете эти риски.';
 const FILE_WARNING = 'Файл предоставлен автором. Проверьте на VirusTotal перед запуском';
 function getApiErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'data' in error) {
@@ -145,13 +145,9 @@ function Shell({ children }: { children: ReactNode }) {
   const accept = useAcceptDisclaimer();
   const queryClient = useQueryClient();
   useEffect(() => {
+    // The browser's saved consent is authoritative; syncing it to the API is best-effort.
     if (localStorage.getItem('disclaimerAccepted')) {
-      accept.mutate(undefined, {
-        onError: () => {
-          localStorage.removeItem('disclaimerAccepted');
-          setDialog(true);
-        },
-      });
+      accept.mutate(undefined);
     }
   }, [accept.mutate]);
   const openConsent = (action: () => void) => {
@@ -165,15 +161,15 @@ function Shell({ children }: { children: ReactNode }) {
     );
     setLocation('/sign-in');
   };
-  const acceptConsent = () => accept.mutate(undefined, {
-    onSuccess: () => {
-      localStorage.setItem('disclaimerAccepted', 'true');
-      setDialog(false);
-      queryClient.invalidateQueries({ queryKey: getListModsQueryKey() });
-      if (location.startsWith('/mods/')) queryClient.invalidateQueries({ queryKey: getGetModQueryKey(location.split('/').pop() || '') });
-      const next = queued; setQueued(null); next?.();
-    },
-  });
+  const acceptConsent = () => {
+    // Save immediately so consent works on static hosting without the backend.
+    localStorage.setItem('disclaimerAccepted', 'true');
+    setDialog(false);
+    queryClient.invalidateQueries({ queryKey: getListModsQueryKey() });
+    if (location.startsWith('/mods/')) queryClient.invalidateQueries({ queryKey: getGetModQueryKey(location.split('/').pop() || '') });
+    const next = queued; setQueued(null); next?.();
+    accept.mutate(undefined);
+  };
   useEffect(() => {
     const requestLogin = () => openConsent(() => login());
     window.addEventListener('tea-login', requestLogin);
@@ -225,9 +221,8 @@ function Shell({ children }: { children: ReactNode }) {
         <p className="mb-2 text-[11px] font-bold uppercase tracking-[.16em] text-primary">Перед загрузкой</p>
         <h2 id="consent-heading" className="font-[var(--app-font-serif)] text-[27px] font-extrabold leading-tight tracking-[-.04em]">Небольшое предупреждение</h2>
         <p className="mt-4 text-[14px] leading-7 text-muted-foreground">{DISCLAIMER}</p>
-        {accept.isError && <p className="mt-3 text-sm text-destructive">Не удалось сохранить согласие. Попробуйте ещё раз.</p>}
-        <button disabled={accept.isPending} onClick={acceptConsent} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground disabled:opacity-60" data-testid="button-accept-disclaimer">
-          {accept.isPending ? 'Сохраняем…' : 'Продолжить'} <ChevronRight size={16} />
+        <button onClick={acceptConsent} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 text-sm font-bold text-primary-foreground" data-testid="button-accept-disclaimer">
+          Продолжить <ChevronRight size={16} />
         </button>
         <button onClick={closeConsent} className="mt-3 w-full py-2 text-sm font-semibold text-muted-foreground hover:text-foreground" data-testid="button-dismiss-disclaimer">Пока не сейчас</button>
       </div>
@@ -311,16 +306,18 @@ function ModPage() {
     if (file.downloadUrl) window.location.assign(file.downloadUrl);
   };
   const accept = useAcceptDisclaimer();
-  const acceptAndDownload = () => accept.mutate(undefined, { onSuccess: () => {
-    localStorage.setItem('disclaimerAccepted', 'true'); setDisclaimer(false);
+  const acceptAndDownload = () => {
+    localStorage.setItem('disclaimerAccepted', 'true');
+    setDisclaimer(false);
     client.invalidateQueries({ queryKey: getGetModQueryKey(modId) });
     const fileId = queuedFile?.id;
     setQueuedFile(null);
+    accept.mutate(undefined);
     if (fileId) detail.refetch().then(result => {
       const url = result.data?.files.find(file => file.id === fileId)?.downloadUrl;
       if (url) window.location.assign(url);
     });
-  } });
+  };
   if (detail.isLoading) return <main className="mx-auto max-w-4xl px-5 py-12"><div className="skeleton h-5 w-28 rounded" /><div className="skeleton mt-8 h-12 w-2/3 rounded" /><div className="skeleton mt-4 h-20 w-full rounded" /><div className="skeleton mt-10 h-56 w-full rounded-2xl" /></main>;
   if (detail.isError || !detail.data) return <main className="mx-auto max-w-4xl px-5 py-16 text-center" data-testid="status-mod-error"><h1 className="font-[var(--app-font-serif)] text-3xl font-extrabold">Мод не найден</h1><p className="mt-3 text-muted-foreground">Возможно, ссылка устарела или мод временно скрыт.</p><Link href="/" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground"><ArrowLeft size={16} /> Вернуться в каталог</Link></main>;
   const mod = detail.data;
@@ -358,7 +355,7 @@ function ModPage() {
       </form>}
        {reportSuccess && <button onClick={() => { setReportOpen(false); setReportSuccess(false); setLocation('/'); }} className="mt-4 w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-primary-foreground" data-testid="button-finish-report">Готово</button>}
     </div></div>}
-    {disclaimer && <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-[3px]" role="dialog" aria-modal="true"><div className="w-full max-w-[440px] rounded-[24px] border border-border bg-card p-7 shadow-2xl"><button onClick={() => { setDisclaimer(false); setQueuedFile(null); }} className="float-right p-1 text-muted-foreground" aria-label="Закрыть"><X size={18} /></button><ShieldAlert size={24} className="mb-5 text-primary" /><h2 className="font-[var(--app-font-serif)] text-2xl font-extrabold">Перед загрузкой</h2><p className="mt-3 text-sm leading-7 text-muted-foreground">{DISCLAIMER}</p>{accept.isError && <p className="mt-3 text-sm text-destructive">Не удалось сохранить согласие. Попробуйте снова.</p>}<button onClick={acceptAndDownload} disabled={accept.isPending} className="mt-6 w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground disabled:opacity-60">{accept.isPending ? 'Сохраняем…' : 'Продолжить'}</button><button onClick={() => { setDisclaimer(false); setQueuedFile(null); }} className="mt-3 w-full py-2 text-sm font-semibold text-muted-foreground">Пока не сейчас</button></div></div>}
+    {disclaimer && <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4 backdrop-blur-[3px]" role="dialog" aria-modal="true"><div className="w-full max-w-[440px] rounded-[24px] border border-border bg-card p-7 shadow-2xl"><button onClick={() => { setDisclaimer(false); setQueuedFile(null); }} className="float-right p-1 text-muted-foreground" aria-label="Закрыть"><X size={18} /></button><ShieldAlert size={24} className="mb-5 text-primary" /><h2 className="font-[var(--app-font-serif)] text-2xl font-extrabold">Перед загрузкой</h2><p className="mt-3 text-sm leading-7 text-muted-foreground">{DISCLAIMER}</p><button onClick={acceptAndDownload} className="mt-6 w-full rounded-xl bg-primary px-4 py-3.5 text-sm font-bold text-primary-foreground">Продолжить</button><button onClick={() => { setDisclaimer(false); setQueuedFile(null); }} className="mt-3 w-full py-2 text-sm font-semibold text-muted-foreground">Пока не сейчас</button></div></div>}
   </main>;
 }
 
