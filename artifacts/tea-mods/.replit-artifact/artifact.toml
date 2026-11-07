@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "TeaMods"
+description = "A Minecraft mod catalog where visitors can discover community mods and authors can publish verified mod files with version details."
+version = "1.0.0"
+id = "artifacts/tea-mods"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18993
+
+[services.development]
+run = "pnpm --filter @workspace/tea-mods run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tea-mods", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/tea-mods/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18993"
+BASE_PATH = "/"
