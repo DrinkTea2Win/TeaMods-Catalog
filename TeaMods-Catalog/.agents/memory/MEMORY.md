@@ -1,0 +1,1 @@
+- [TeaMods Google Drive](google-drive.md) — Use the direct service-account API; Shared Drive storage is required when Google returns storageQuotaExceeded.
