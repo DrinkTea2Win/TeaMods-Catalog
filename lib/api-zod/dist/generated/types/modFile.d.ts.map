@@ -1,0 +1,1 @@
+{"version":3,"file":"modFile.d.ts","sourceRoot":"","sources":["../../../src/generated/types/modFile.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AAEH,MAAM,WAAW,OAAO;IACtB,EAAE,EAAE,MAAM,CAAC;IACX,QAAQ,EAAE,MAAM,CAAC;IACjB,iBAAiB,EAAE,MAAM,EAAE,CAAC;IAC5B,gBAAgB;IAChB,WAAW,EAAE,MAAM,GAAG,IAAI,CAAC;IAC3B,SAAS,EAAE,IAAI,CAAC;CACjB"}
